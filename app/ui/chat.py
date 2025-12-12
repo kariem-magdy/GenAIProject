@@ -14,7 +14,7 @@ app_graph = build_graph()
 @cl.on_chat_start
 async def start():
     cl.user_session.set("metrics", MetricsTracker())
-    await cl.Message(content="**🚀 QA Testing Agent**\n\nFeatures:\n- 🌊 Streaming Tokens\n- 👁️ Visual Diffing\n\nEnter a **URL** to begin.").send()
+    await cl.Message(content="**🚀 QA Testing Agent**\n\nFeatures:\n- 🌊 Streaming Tokens\n\nEnter a **URL** to begin.").send()
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -67,8 +67,19 @@ async def main(message: cl.Message):
 
             if name == "explore":
                 summary = output.get("page_summary", "")
-                # Update with final clean content
-                current_msg.content = f"**✅ Exploration Complete**\n\n{summary}"
+                
+                # NEW: Extract the specific execution speed for the 'Explore' phase
+                # We access the internal step_times from metrics to find the 'Exploration' step
+                stats = metrics.get_stats()
+                explore_time = 0.0
+                if "steps" in stats:
+                     # Find the step named 'Exploration' (logged in nodes.py)
+                     for s in stats["steps"]:
+                         if s["step"] == "Exploration":
+                             explore_time = s.get("step_duration", 0.0)
+                
+                # Update with final clean content + Execution Time
+                current_msg.content = f"**✅ Exploration Complete** (Time: {explore_time}s)\n\n{summary}"
                 if output.get("screenshot_path"):
                     current_msg.elements = [cl.Image(path=output["screenshot_path"], name="initial_state", display="inline")]
                 await current_msg.update()

@@ -1,111 +1,119 @@
 import asyncio
 from playwright.async_api import async_playwright, expect
 
-# Constants
-BASE_URL = "https://practicetestautomation.com/practice-test-login/"
-SUCCESS_PAGE_FULL_URL = "https://practicetestautomation.com/logged-in-successfully/"
-VALID_USERNAME = "student"
-VALID_PASSWORD = "Password123"
-INVALID_USERNAME = "wronguser"
-INVALID_PASSWORD = "wrongpass" # Using an invalid password as well, but the page's validation prioritizes username.
-ERROR_MESSAGE_TEXT_USERNAME_INVALID = "Your username is invalid!"
-MOBILE_VIEWPORT = {"width": 375, "height": 667}
-
 async def main():
-    all_tests_passed = True # Flag to track overall test status
+    test_passed = True
+    print("Starting Playwright tests for Login Functionality...")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
         page = await browser.new_page()
 
-        print(f"Starting tests for: {BASE_URL}\n")
+        base_url = "https://practicetestautomation.com/practice-test-login/"
+        valid_username = "student"
+        valid_password = "Password123"
+        invalid_username = "incorrectUser"
+        invalid_password = "incorrectPassword"
+
+        # Locators
+        username_field = page.locator("#username")
+        password_field = page.locator("#password")
+        submit_button = page.locator("#submit")
+        error_message_div = page.locator("#error") # Error message div has id="error"
 
         # --- Test Scenario 1: Verify Successful Login with Valid Credentials ---
-        scenario_name_1 = "Scenario 1: Successful Login"
-        print(f"--- Running {scenario_name_1} ---")
+        print("\n--- Running Test Scenario 1: Verify Successful Login with Valid Credentials ---")
         try:
-            await page.goto(BASE_URL)
-            await page.locator("#username").fill(VALID_USERNAME)
-            await page.locator("#password").fill(VALID_PASSWORD)
-            await page.locator("#submit").click()
+            await page.goto(base_url, wait_until="domcontentloaded")
+            await expect(page).to_have_url(base_url)
+            print("Step 1: Navigated to the login page.")
 
-            # Assertions for successful login
-            await expect(page).to_have_url(SUCCESS_PAGE_FULL_URL)
-            await expect(page.locator(".post-title")).to_have_text("Logged In Successfully")
-            await expect(page.locator(".wp-block-button__link", has_text="Log out")).to_be_visible()
+            await username_field.fill(valid_username)
+            print(f"Step 2: Entered username '{valid_username}'.")
+            await password_field.fill(valid_password)
+            print("Step 3: Entered valid password.")
+            await submit_button.click()
+            print("Step 4: Clicked the 'Submit' button.")
 
-            print(f"{scenario_name_1}: PASSED\n")
+            # Expected Result: The user is redirected to a success page, sees a success message,
+            # and a logout button.
+            expected_success_url = "https://practicetestautomation.com/logged-in-successfully/"
+            await expect(page).to_have_url(expected_success_url)
+            print(f"Step 5 (Verification): Verified new page URL contains '{expected_success_url}'.")
+
+            # Verify new page contains expected text ('Congratulations' or 'successfully logged in')
+            # Based on actual success page structure:
+            await expect(page.locator("h1.post-title")).to_have_text("Logged In Successfully")
+            await expect(page.locator(".post-content")).to_contain_text("Congratulations")
+            print("Step 6 (Verification): Verified success messages 'Logged In Successfully' and 'Congratulations'.")
+
+            # Verify 'Log out' link/button is displayed on the new page
+            logout_link = page.get_by_role("link", name="Log out")
+            await expect(logout_link).to_be_visible()
+            print("Step 7 (Verification): Verified 'Log out' link is displayed.")
+            print("Test Scenario 1 PASSED.")
+
         except Exception as e:
-            print(f"{scenario_name_1}: FAILED - {e}\n")
-            all_tests_passed = False
-            await page.screenshot(path=f"failed_{scenario_name_1.replace(' ', '_').lower()}.png")
-        finally:
-            # Navigate back to the login page for the next test scenario
-            await page.goto(BASE_URL)
+            print(f"Test Scenario 1 FAILED: {e}")
+            test_passed = False
 
-        # --- Test Scenario 2: Verify Login Failure with Invalid Credentials and Error Message ---
-        scenario_name_2 = "Scenario 2: Invalid Login (Wrong Username)"
-        print(f"--- Running {scenario_name_2} ---")
+        # --- Test Scenario 2: Verify Unsuccessful Login with Invalid Username ---
+        print("\n--- Running Test Scenario 2: Verify Unsuccessful Login with Invalid Username ---")
         try:
-            # Ensure we are on the login page
-            await page.goto(BASE_URL) # Ensure fresh state
-            await page.locator("#username").fill(INVALID_USERNAME)
-            await page.locator("#password").fill(INVALID_PASSWORD)
-            await page.locator("#submit").click()
+            await page.goto(base_url, wait_until="domcontentloaded")
+            await expect(page).to_have_url(base_url)
+            print("Step 1: Navigated to the login page.")
 
-            # Assertions for invalid login
-            error_message_locator = page.locator("#error")
-            await expect(error_message_locator).to_be_visible()
-            await expect(error_message_locator).to_have_text(ERROR_MESSAGE_TEXT_USERNAME_INVALID)
-            await expect(page).to_have_url(BASE_URL) # Should remain on the login page URL
+            await username_field.fill(invalid_username)
+            print(f"Step 2: Entered invalid username '{invalid_username}'.")
+            await password_field.fill(valid_password) # Password can be valid or invalid as per test plan
+            print("Step 3: Entered a password (valid in this case).")
+            await submit_button.click()
+            print("Step 4: Clicked the 'Submit' button.")
 
-            print(f"{scenario_name_2}: PASSED\n")
+            # Expected Result: An error message is displayed and the user remains on the login page.
+            await expect(error_message_div).to_be_visible()
+            print("Step 5 (Verification): Verified error message is displayed.")
+            await expect(error_message_div).to_have_text("Your username is invalid!")
+            print("Step 6 (Verification): Verified error message text is 'Your username is invalid!'.")
+            await expect(page).to_have_url(base_url) # Should stay on the same page
+            print("Step 7 (Verification): Verified user remained on the login page.")
+            print("Test Scenario 2 PASSED.")
+
         except Exception as e:
-            print(f"{scenario_name_2}: FAILED - {e}\n")
-            all_tests_passed = False
-            await page.screenshot(path=f"failed_{scenario_name_2.replace(' ', '_').lower()}.png")
-        finally:
-            # Clear fields and reload for a clean state before next test
-            await page.locator("#username").fill("")
-            await page.locator("#password").fill("")
-            await page.reload() # Ensures clean state after potential error display
+            print(f"Test Scenario 2 FAILED: {e}")
+            test_passed = False
 
-        # --- Test Scenario 3: Verify Mobile Navigation Toggle Functionality ---
-        scenario_name_3 = "Scenario 3: Mobile Navigation Toggle"
-        print(f"--- Running {scenario_name_3} ---")
+        # --- Test Scenario 3: Verify Unsuccessful Login with Invalid Password ---
+        print("\n--- Running Test Scenario 3: Verify Unsuccessful Login with Invalid Password ---")
         try:
-            # Set mobile viewport
-            await page.set_viewport_size(MOBILE_VIEWPORT)
-            await page.goto(BASE_URL) # Reload the page with the new viewport
+            await page.goto(base_url, wait_until="domcontentloaded")
+            await expect(page).to_have_url(base_url)
+            print("Step 1: Navigated to the login page.")
 
-            toggle_button_locator = page.locator("#toggle-navigation")
-            # Locate an element inside the mobile menu to verify its visibility
-            home_menu_item_locator = page.locator("#mobile-menu-container >> text=Home")
+            await username_field.fill(valid_username)
+            print(f"Step 2: Entered valid username '{valid_username}'.")
+            await password_field.fill(invalid_password)
+            print(f"Step 3: Entered invalid password '{invalid_password}'.")
+            await submit_button.click()
+            print("Step 4: Clicked the 'Submit' button.")
 
-            # Assert menu is initially hidden
-            await expect(home_menu_item_locator).not_to_be_visible()
+            # Expected Result: An error message is displayed and the user remains on the login page.
+            await expect(error_message_div).to_be_visible()
+            print("Step 5 (Verification): Verified error message is displayed.")
+            await expect(error_message_div).to_have_text("Your password is invalid!")
+            print("Step 6 (Verification): Verified error message text is 'Your password is invalid!'.")
+            await expect(page).to_have_url(base_url) # Should stay on the same page
+            print("Step 7 (Verification): Verified user remained on the login page.")
+            print("Test Scenario 3 PASSED.")
 
-            # Click to show menu
-            await toggle_button_locator.click()
-            await expect(home_menu_item_locator).to_be_visible()
-
-            # Click to hide menu
-            await toggle_button_locator.click()
-            await expect(home_menu_item_locator).not_to_be_visible()
-
-            print(f"{scenario_name_3}: PASSED\n")
         except Exception as e:
-            print(f"{scenario_name_3}: FAILED - {e}\n")
-            all_tests_passed = False
-            await page.screenshot(path=f"failed_{scenario_name_3.replace(' ', '_').lower()}.png")
-        finally:
-            # Reset viewport to default desktop size for proper browser closure or subsequent tests
-            await page.set_viewport_size({"width": 1280, "height": 720})
+            print(f"Test Scenario 3 FAILED: {e}")
+            test_passed = False
 
         await browser.close()
 
-    # --- Final Test Result Output ---
-    if all_tests_passed:
+    if test_passed:
         print("\nTEST PASSED")
     else:
         print("\nTEST FAILED")

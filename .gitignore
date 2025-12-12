@@ -170,3 +170,5 @@ test_output/
 *_test_result.*
 *_fail.png
 *_pass.png
+
+generated_test_runner.py
