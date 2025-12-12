@@ -1,96 +1,114 @@
 import asyncio
 from playwright.async_api import async_playwright, expect
 
-URL = "https://practicetestautomation.com/practice-test-login/"
+# Constants
+BASE_URL = "https://practicetestautomation.com/practice-test-login/"
+SUCCESS_PAGE_FULL_URL = "https://practicetestautomation.com/logged-in-successfully/"
+VALID_USERNAME = "student"
+VALID_PASSWORD = "Password123"
+INVALID_USERNAME = "wronguser"
+INVALID_PASSWORD = "wrongpass" # Using an invalid password as well, but the page's validation prioritizes username.
+ERROR_MESSAGE_TEXT_USERNAME_INVALID = "Your username is invalid!"
+MOBILE_VIEWPORT = {"width": 375, "height": 667}
 
 async def main():
+    all_tests_passed = True # Flag to track overall test status
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
         page = await browser.new_page()
 
-        # --- Scenario 1: Verify Positive Login with Valid Credentials ---
-        print("Running Scenario 1: Verify Positive Login with Valid Credentials...")
-        try:
-            await page.goto(URL)
-            await page.fill('#username', 'student')
-            await page.fill('#password', 'Password123')
-            await page.click('#submit')
+        print(f"Starting tests for: {BASE_URL}\n")
 
-            # Expect redirection to the success page URL
-            await expect(page).to_have_url("https://practicetestautomation.com/logged-in-successfully/")
-            # Expect success message on the new page. The test plan suggests 'Congratulations' or 'successfully logged in'.
-            # Assuming 'Congratulations' is present in an H1 tag based on typical success page structures.
-            await expect(page.locator('h1')).to_have_text('Congratulations')
-            print("Scenario 1: TEST PASSED")
+        # --- Test Scenario 1: Verify Successful Login with Valid Credentials ---
+        scenario_name_1 = "Scenario 1: Successful Login"
+        print(f"--- Running {scenario_name_1} ---")
+        try:
+            await page.goto(BASE_URL)
+            await page.locator("#username").fill(VALID_USERNAME)
+            await page.locator("#password").fill(VALID_PASSWORD)
+            await page.locator("#submit").click()
+
+            # Assertions for successful login
+            await expect(page).to_have_url(SUCCESS_PAGE_FULL_URL)
+            await expect(page.locator(".post-title")).to_have_text("Logged In Successfully")
+            await expect(page.locator(".wp-block-button__link", has_text="Log out")).to_be_visible()
+
+            print(f"{scenario_name_1}: PASSED\n")
         except Exception as e:
-            print(f"Scenario 1: TEST FAILED - {e}")
-            await page.screenshot(path="scenario1_fail.png")
-            # If scenario 1 fails, ensure we navigate back for the next test
-            await page.goto(URL) # Ensure we are on the login page for the next scenario
+            print(f"{scenario_name_1}: FAILED - {e}\n")
+            all_tests_passed = False
+            await page.screenshot(path=f"failed_{scenario_name_1.replace(' ', '_').lower()}.png")
+        finally:
+            # Navigate back to the login page for the next test scenario
+            await page.goto(BASE_URL)
 
-
-        # --- Scenario 2: Verify Negative Login with Invalid Credentials ---
-        print("\nRunning Scenario 2: Verify Negative Login with Invalid Credentials...")
+        # --- Test Scenario 2: Verify Login Failure with Invalid Credentials and Error Message ---
+        scenario_name_2 = "Scenario 2: Invalid Login (Wrong Username)"
+        print(f"--- Running {scenario_name_2} ---")
         try:
-            # Ensure we are on the login page before starting this scenario
-            if page.url != URL:
-                await page.goto(URL)
+            # Ensure we are on the login page
+            await page.goto(BASE_URL) # Ensure fresh state
+            await page.locator("#username").fill(INVALID_USERNAME)
+            await page.locator("#password").fill(INVALID_PASSWORD)
+            await page.locator("#submit").click()
 
-            await page.fill('#username', 'wronguser')
-            await page.fill('#password', 'wrongpass')
-            await page.click('#submit')
-
-            # Expect to remain on the login page (URL does not change)
-            await expect(page).to_have_url(URL)
-            
-            # Expect error message to be displayed and have specific text
-            # Based on the provided DOM, the error message is in a div with id="error".
-            # The DOM snippet shows 'Your username is invalid!' for the error div.
-            error_message_locator = page.locator('#error')
+            # Assertions for invalid login
+            error_message_locator = page.locator("#error")
             await expect(error_message_locator).to_be_visible()
-            await expect(error_message_locator).to_have_text('Your username is invalid!')
-            print("Scenario 2: TEST PASSED")
+            await expect(error_message_locator).to_have_text(ERROR_MESSAGE_TEXT_USERNAME_INVALID)
+            await expect(page).to_have_url(BASE_URL) # Should remain on the login page URL
+
+            print(f"{scenario_name_2}: PASSED\n")
         except Exception as e:
-            print(f"Scenario 2: TEST FAILED - {e}")
-            await page.screenshot(path="scenario2_fail.png")
+            print(f"{scenario_name_2}: FAILED - {e}\n")
+            all_tests_passed = False
+            await page.screenshot(path=f"failed_{scenario_name_2.replace(' ', '_').lower()}.png")
+        finally:
+            # Clear fields and reload for a clean state before next test
+            await page.locator("#username").fill("")
+            await page.locator("#password").fill("")
+            await page.reload() # Ensures clean state after potential error display
 
-
-        # --- Scenario 3: Verify UI Element Functionality and Navigation ---
-        print("\nRunning Scenario 3: Verify UI Element Functionality and Navigation...")
+        # --- Test Scenario 3: Verify Mobile Navigation Toggle Functionality ---
+        scenario_name_3 = "Scenario 3: Mobile Navigation Toggle"
+        print(f"--- Running {scenario_name_3} ---")
         try:
-            # Ensure we are on the login page before starting this scenario
-            if page.url != URL:
-                await page.goto(URL)
+            # Set mobile viewport
+            await page.set_viewport_size(MOBILE_VIEWPORT)
+            await page.goto(BASE_URL) # Reload the page with the new viewport
 
-            toggle_button = page.locator('#toggle-navigation')
-            # The primary menu items are within a UL with id="menu-primary-items"
-            menu_items_container = page.locator('#menu-primary-items')
+            toggle_button_locator = page.locator("#toggle-navigation")
+            # Locate an element inside the mobile menu to verify its visibility
+            home_menu_item_locator = page.locator("#mobile-menu-container >> text=Home")
 
-            # 1. Click toggle button and verify menu becomes visible
-            await toggle_button.click()
-            await expect(menu_items_container).to_be_visible()
-            print("   - Menu visible after first toggle click: PASSED")
+            # Assert menu is initially hidden
+            await expect(home_menu_item_locator).not_to_be_visible()
 
-            # 2. Click toggle button again and verify menu becomes hidden
-            await toggle_button.click()
-            await expect(menu_items_container).not_to_be_visible()
-            print("   - Menu hidden after second toggle click: PASSED")
+            # Click to show menu
+            await toggle_button_locator.click()
+            await expect(home_menu_item_locator).to_be_visible()
 
-            # 3. Click the "Practice" navigation link
-            # Need to make the menu visible again to click the link
-            await toggle_button.click() # Re-open the menu
-            await page.click('#menu-item-20 a') # Click the 'Practice' link using its ID and descendant 'a'
+            # Click to hide menu
+            await toggle_button_locator.click()
+            await expect(home_menu_item_locator).not_to_be_visible()
 
-            # Expect navigation to the "Practice" page
-            await expect(page).to_have_url("https://practicetestautomation.com/practice/")
-            print("   - Navigated to Practice page: PASSED")
-
-            print("Scenario 3: TEST PASSED")
+            print(f"{scenario_name_3}: PASSED\n")
         except Exception as e:
-            print(f"Scenario 3: TEST FAILED - {e}")
-            await page.screenshot(path="scenario3_fail.png")
+            print(f"{scenario_name_3}: FAILED - {e}\n")
+            all_tests_passed = False
+            await page.screenshot(path=f"failed_{scenario_name_3.replace(' ', '_').lower()}.png")
+        finally:
+            # Reset viewport to default desktop size for proper browser closure or subsequent tests
+            await page.set_viewport_size({"width": 1280, "height": 720})
 
         await browser.close()
 
-if __name__ == '__main__':
+    # --- Final Test Result Output ---
+    if all_tests_passed:
+        print("\nTEST PASSED")
+    else:
+        print("\nTEST FAILED")
+
+if __name__ == "__main__":
     asyncio.run(main())

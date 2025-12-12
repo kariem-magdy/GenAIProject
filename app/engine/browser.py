@@ -66,7 +66,6 @@ class BrowserManager:
         stdout, stderr = await proc.communicate()
         
         output = ""
-        # FIX: Use errors='replace' to safely handle non-UTF-8 characters (like 0xd7)
         if stdout: output += stdout.decode(errors='replace')
         if stderr: output += "\nERROR:\n" + stderr.decode(errors='replace')
         
