@@ -2,8 +2,8 @@ from app.core.state import AgentState
 from app.core.llm import get_llm
 from app.engine.browser import BrowserManager
 from app.engine.dom_cleaner import DOMCleaner
-# UPDATED IMPORT:
 from langchain_core.messages import HumanMessage
+import asyncio
 
 # Global browser instance to persist state across nodes
 browser = BrowserManager()
@@ -46,6 +46,9 @@ async def node_design(state: AgentState):
     """
     Phase 2: Collaborative Test Design.
     """
+    print("⏳ Waiting to avoid rate limits...")
+    await asyncio.sleep(5)  # <--- THROTTLING ADDED
+    
     llm = get_llm()
     summary = state['page_summary']
     
@@ -67,6 +70,9 @@ async def node_implement(state: AgentState):
     """
     Phase 3: Implementation.
     """
+    print("⏳ Waiting to avoid rate limits...")
+    await asyncio.sleep(5)  # <--- THROTTLING ADDED
+    
     llm = get_llm()
     plan = state['test_plan']
     dom = state['clean_dom']
